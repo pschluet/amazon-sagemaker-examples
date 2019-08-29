@@ -1,18 +1,21 @@
 # Build an image that can do training and inference in SageMaker
-# This is a Python 2 image that uses the nginx, gunicorn, flask stack
+# This is a Python 3.6 image that uses the nginx, gunicorn, flask stack
 # for serving inferences in a stable way.
 
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 
 LABEL maintainer="Amazon AI <sage-learner@amazon.com>"
 
 
 RUN apt-get -y update && apt-get install -y --no-install-recommends \
          wget \
-         python \
+         python3.6-dev \
+         python3-distutils \
          nginx \
          ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+        && cd /usr/local/bin \
+        && ln -s /usr/bin/python3.6 python \
+        && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements.txt
 
@@ -24,7 +27,7 @@ COPY requirements.txt requirements.txt
 RUN wget https://bootstrap.pypa.io/get-pip.py && \
         python get-pip.py && \
         pip install -r requirements.txt && \
-        (cd /usr/local/lib/python2.7/dist-packages/scipy/.libs; rm *; ln ../../numpy/.libs/* .) && \
+        (cd /usr/local/lib/python3.6/dist-packages/scipy/.libs; rm *; ln ../../numpy/.libs/* .) && \
         rm -rf /root/.cache
 
 # Set some environment variables. PYTHONUNBUFFERED keeps Python from buffering our standard

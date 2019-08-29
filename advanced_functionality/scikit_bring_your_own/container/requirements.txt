@@ -6,5 +6,6 @@ flask
 gevent
 gunicorn
 
+# Only needed for deployment to AWS
 boto3
 sagemaker

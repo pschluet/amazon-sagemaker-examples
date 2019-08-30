@@ -4,11 +4,13 @@ services:
     image: jnotebook
     ports:
       - "8888:8888"
+      - "8080:8080"
     volumes:
-      - ..:/home/jovyan/work
-      - ~/.aws:/home/jovyan/.aws
+      - ../container/local_test/test_dir:/opt/ml
+      - ../container/algorithm:/opt/program
+      - ..:/opt/volume
+      - ~/.aws:/root/.aws
     environment:
-      - JUPYTER_ENABLE_LAB=yes
       - MLFLOW_TRACKING_URI=http://production.yg2upmxaxt.us-east-1.elasticbeanstalk.com
       - USER
-    working_dir: "/home/jovyan/work"
+    working_dir: "/opt/volume"

@@ -1,7 +1,6 @@
-FROM jupyter/minimal-notebook
+FROM scikit
 
 COPY extra-requirements.txt extra-requirements.txt
 RUN pip install -r extra-requirements.txt
 
-COPY requirements.txt requirements.txt
-RUN pip install -r requirements.txt
+CMD jupyter lab --ip=0.0.0.0 --allow-root

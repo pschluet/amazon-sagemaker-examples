@@ -12,9 +12,11 @@ from joblib import dump
 import sys
 import traceback
 
+import numpy as np
 import pandas as pd
 
 from sklearn import tree
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 
 # These are the paths to where SageMaker mounts interesting things in your container.
 
@@ -27,7 +29,7 @@ param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
 
 # This algorithm has a single channel of input data called 'training'. Since we run in
 # File mode, the input files are copied to the directory specified here.
-channel_name='training'
+channel_name='train'
 training_path = os.path.join(input_path, channel_name)
 
 # The function to execute the training.
@@ -62,6 +64,14 @@ def train():
         clf = tree.DecisionTreeClassifier(max_leaf_nodes=max_leaf_nodes)
         clf = clf.fit(train_X, train_y)
 
+        # Evaluate the model using cross-validation
+        cross_validate(
+            model=clf,
+            X=train_X,
+            y=train_y,
+            K=5
+        )
+
         # save the model
         dump(clf, os.path.join(model_path, 'model.joblib'))
         print('Training complete.')
@@ -75,6 +85,25 @@ def train():
         print('Exception during training: ' + str(e) + '\n' + trc, file=sys.stderr)
         # A non-zero exit code causes the training job to be marked as Failed.
         sys.exit(255)
+
+def cross_validate(model, X, y, K):
+    """Evaluate the model using K-fold cross-validation
+    
+    Arguments:
+        model -- sci-kit learn estimator
+        X {[pandas.core.frame.DataFrame]} -- feature data
+        y {[pandas.core.series.Series]} -- label data
+        K {[int]} -- the number of folds to use for cross-validation
+    """
+    score = cross_val_score(
+        estimator=model,
+        X=X,
+        y=y,
+        cv=StratifiedKFold(K)
+    )
+    # Print this to CloudWatch logs so hyperparameter tuning jobs can pick up on it
+    # with the following regex:	-Fold-Cross-Validated::accuracy::([0-9.]+)::
+    print('::{}-Fold-Cross-Validated::accuracy::{}::'.format(K, np.mean(score)))
 
 if __name__ == '__main__':
     train()

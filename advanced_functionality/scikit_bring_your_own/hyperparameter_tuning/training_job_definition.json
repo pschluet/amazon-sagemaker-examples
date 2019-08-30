@@ -1,0 +1,39 @@
+{
+    "AlgorithmSpecification": {
+        "MetricDefinitions": [
+            {
+                "Name": "Cross-Validated-Accuracy",
+                "Regex": "-Fold-Cross-Validated::accuracy::([0-9.]+)::"
+            }
+        ],
+        "TrainingImage": "435432815368.dkr.ecr.us-east-1.amazonaws.com/scikit:latest",
+        "TrainingInputMode": "File"
+    },
+    "InputDataConfig": [
+        {
+            "ChannelName": "train",
+            "DataSource": {
+                "S3DataSource": {
+                    "S3DataType": "S3Prefix",
+                    "S3Uri": "s3://sagemaker-us-east-1-435432815368/DEMO-scikit-byo-iris",
+                    "S3DataDistributionType": "FullyReplicated"
+                }
+            },
+            "CompressionType": "None",
+            "RecordWrapperType": "None"
+        }
+    ],
+    "OutputDataConfig": {
+        "S3OutputPath": "s3://sagemaker-us-east-1-435432815368/output"
+    },
+    "ResourceConfig": {
+        "InstanceCount": 1,
+        "InstanceType": "ml.m5.large",
+        "VolumeSizeInGB": 2
+    },
+    "RoleArn": "arn:aws:iam::435432815368:role/SageMaker-Notebook",
+    "StaticHyperParameters": {},
+    "StoppingCondition": {
+        "MaxRuntimeInSeconds": 600
+    }
+}

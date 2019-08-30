@@ -5,7 +5,3 @@ pandas==0.25.1
 flask==1.1.1
 gevent==1.4.0
 gunicorn==19.9.0
-
-# Only needed for deployment to AWS
-boto3==1.9.218
-sagemaker==1.38.4

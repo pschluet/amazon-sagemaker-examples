@@ -1,0 +1,14 @@
+version: '3'
+services:
+  notebook:
+    image: jnotebook
+    ports:
+      - "8888:8888"
+    volumes:
+      - ..:/home/jovyan/work
+      - ~/.aws:/home/jovyan/.aws
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - MLFLOW_TRACKING_URI=http://production.yg2upmxaxt.us-east-1.elasticbeanstalk.com
+      - USER
+    working_dir: "/home/jovyan/work"

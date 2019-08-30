@@ -1,0 +1,20 @@
+{
+    "ParameterRanges": {
+        "CategoricalParameterRanges": [],
+        "ContinuousParameterRanges": [],
+        "IntegerParameterRanges": [{
+            "MaxValue": "50",
+            "MinValue": "2",
+            "Name": "max_leaf_nodes"
+        }]
+    },
+    "ResourceLimits": {
+        "MaxNumberOfTrainingJobs": 4,
+        "MaxParallelTrainingJobs": 2
+    },
+    "Strategy": "Bayesian",
+    "HyperParameterTuningJobObjective": {
+        "MetricName": "Cross-Validated-Accuracy",
+        "Type": "Maximize"
+    }
+}

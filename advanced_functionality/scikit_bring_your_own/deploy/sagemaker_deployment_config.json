@@ -1,0 +1,6 @@
+{
+    "TrainingJobName": "paulschluete-2019-08-30T16-34-48-002-b5a308f7",
+    "ExecutionRoleArn": "arn:aws:iam::435432815368:role/SageMaker-Notebook",
+    "InstanceType": "ml.t2.medium",
+    "EndpointName": "MySampleEndpoint"
+}

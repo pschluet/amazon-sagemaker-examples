@@ -6,7 +6,7 @@ class DeploymentClient:
     def __init__(self):
         self.sm_client = boto3.client('sagemaker')
     
-    def create_model(self, training_job_name, execution_role_arn):
+    def _create_model(self, training_job_name, execution_role_arn):
         if self._model_exists(training_job_name):
             print('Model already exists for training job {}'.format(training_job_name))
             return None
@@ -24,7 +24,7 @@ class DeploymentClient:
             print('Created model: {}'.format(response['ModelArn']))
             return response
 
-    def create_endpoint_config(self, training_job_name, instance_type):
+    def _create_endpoint_config(self, training_job_name, instance_type):
         endpoint_config_name = self._generate_endpoint_config_name(training_job_name)
         response = self.sm_client.create_endpoint_config(
             EndpointConfigName = endpoint_config_name,
@@ -47,7 +47,7 @@ class DeploymentClient:
     def _generate_endpoint_config_name(self, training_job_name):
         return '{}-{}'.format(training_job_name, uuid.uuid4().hex[:7])
 
-    def create_endpoint(self, endpoint_name, endpoint_config_name):
+    def _create_endpoint(self, endpoint_name, endpoint_config_name):
         
         if self._endpoint_exists(endpoint_name):
             # update
@@ -65,24 +65,29 @@ class DeploymentClient:
             print('Created endpoint: {}'.format(endpoint_response['EndpointArn']))
         return endpoint_response
 
+    def deploy_endpoint(self, config):
+        create_model_response = self._create_model(
+            training_job_name=config['TrainingJobName'],
+            execution_role_arn=config['ExecutionRoleArn']
+        )
+
+        create_endpoint_config_response, endpoint_config_name = self._create_endpoint_config(
+            training_job_name=config['TrainingJobName'],
+            instance_type=config['InstanceType']
+        )
+
+        create_endpoint_response = self._create_endpoint(
+            endpoint_name=config['EndpointName'],
+            endpoint_config_name=endpoint_config_name
+        )
+
+        return create_endpoint_response
+
 def main():
     client = DeploymentClient()
     config = json.load(open('sagemaker_deployment_config.json'))
 
-    create_model_response = client.create_model(
-        training_job_name=config['TrainingJobName'],
-        execution_role_arn=config['ExecutionRoleArn']
-    )
-
-    create_endpoint_config_response, endpoint_config_name = client.create_endpoint_config(
-        training_job_name=config['TrainingJobName'],
-        instance_type=config['InstanceType']
-    )
-
-    create_endpoint_response = client.create_endpoint(
-        endpoint_name=config['EndpointName'],
-        endpoint_config_name=endpoint_config_name
-    )
+    client.deploy_endpoint(config)
 
 
 if __name__=='__main__':

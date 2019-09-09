@@ -1,0 +1,335 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Machine learning model API deployment pipeline"
+Parameters:
+  BranchName:
+    Description: GitHub branch name
+    Type: String
+    Default: master
+  RepositoryName:
+    Description: GitHub repository name
+    Type: String
+    Default: test
+  GitHubOwner:
+    Type: String
+  GitHubSecret:
+    Type: String
+    NoEcho: true
+  GitHubOAuthToken:
+    Type: String
+    NoEcho: true
+  ModelName:
+    Description: Machine learning model name
+    Type: String
+    Default: TestModel
+  RepositoryURL:
+    Description: URL of the GitHub repository that contains the source code
+    Default: https://github.com/pschluet/amazon-sagemaker-examples.git
+# Mappings:
+#   set of mappings
+# Conditions:
+#   set of conditions
+Resources:
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties: 
+      RepositoryName: !Ref ModelName
+      # RepositoryPolicyText: Json
+  # CodePipelineCloudformationLogs? TODO
+  CodeBuildLogGroup: 
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      RetentionInDays: 7
+  CodeBuildServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+    Policies:
+      - PolicyName: AWS-Codebuild-Service-Role
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Resource:
+            # TODO change to correct log names
+            # - arn:aws:logs:us-east-1:435432815368:log-group:/aws/codebuild/test
+            # - arn:aws:logs:us-east-1:435432815368:log-group:/aws/codebuild/test:*
+            - !GetAtt 
+              - CodeBuildLogGroup
+              - Arn
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          - Effect: Allow
+            Resource:
+            - arn:aws:s3:::codepipeline-us-east-1-*
+            Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:GetObjectVersion
+            - s3:GetBucketAcl
+            - s3:GetBucketLocation
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties: 
+      Artifacts: 
+        Type: NO_ARTIFACTS
+      BadgeEnabled: true
+      Description: Builds the ML algorithm Docker container and deploys to Amazon ECR
+      Environment: 
+        ComputeType: BUILD_GENERAL1_SMALL
+        # EnvironmentVariables: 
+        #   - EnvironmentVariable
+        Image: "aws/codebuild/amazonlinux2-x86_64-standard:1.0"
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      LogsConfig: 
+        CloudWatchLogs: 
+          Status: ENABLED
+        S3Logs: 
+          Status: DISABLED
+      Name: !Ref ModelName
+      ServiceRole: !GetAtt
+        - CodeBuildServiceRole
+        - Arn
+      Source: 
+        BuildSpec: "advanced_functionality/scikit_bring_your_own/deploy/buildspec.yaml"
+        # InsecureSsl: Boolean
+        Location: !Ref RepositoryURL
+        ReportBuildStatus: true
+        # SourceIdentifier: String
+        Type: GITHUB
+      TimeoutInMinutes: 60
+      # Triggers: 
+      #   ProjectTriggers
+      # VpcConfig: 
+      #   VpcConfig
+  CodePipelineArtifactStoreBucket:
+    Type: 'AWS::S3::Bucket'
+  CodePipelineArtifactStoreBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref CodePipelineArtifactStoreBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Join 
+              - ''
+              - - !GetAtt 
+                  - CodePipelineArtifactStoreBucket
+                  - Arn
+                - /*
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Join 
+              - ''
+              - - !GetAtt 
+                  - CodePipelineArtifactStoreBucket
+                  - Arn
+                - /*
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+  DeploymentPipelineWebhook:
+    Type: 'AWS::CodePipeline::Webhook'
+    Properties:
+      Authentication: GITHUB_HMAC
+      AuthenticationConfiguration:
+        SecretToken: !Ref GitHubSecret
+      Filters:
+        - JsonPath: $.ref
+          MatchEquals: 'refs/heads/{Branch}'
+      TargetPipeline: !Ref DeploymentPipeline
+      TargetAction: SourceAction
+      Name: DeploymentPipelineWebhook
+      TargetPipelineVersion: !GetAtt 
+        - DeploymentPipeline
+        - Version
+      RegisterWithThirdParty: true
+  DeploymentPipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties: 
+      ArtifactStore: 
+        Type: S3
+        Location: !Ref CodePipelineArtifactStoreBucket
+      # DisableInboundStageTransitions: 
+      #   - StageTransition
+      Name: !Join
+        - '-'
+        - - !Ref ModelName
+          - 'api-pipeline'
+      RestartExecutionOnUpdate: false
+      RoleArn: !GetAtt 
+        - CodePipelineServiceRole
+        - Arn
+      Stages: 
+        - Name: Source
+          Actions:
+            - ActionTypeId: 
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: 1
+              Configuration:
+                Owner: !Ref GitHubOwner
+                Repo: !Ref RepositoryName
+                Branch: !Ref BranchName
+                OAuthToken: !Ref GitHubOAuthToken
+                PollForSourceChanges: false
+              Name: SourceAction
+              OutputArtifacts: 
+                - Name: SourceOutput
+              RunOrder: 1
+        - Name: DeployToEcr
+          Actions:
+            - ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration: Json
+              InputArtifacts: 
+                - InputArtifact
+              Name: String
+              OutputArtifacts: 
+                - OutputArtifact
+              Region: String
+              RoleArn: String
+              RunOrder: Integer
+  CodePipelineServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+    Policies:
+      - PolicyName: AWS-CodePipeline-Service
+        PolicyDocument:
+          Statement:
+            - Action:
+              - iam:PassRole
+              Resource: "*"
+              Effect: Allow
+              Condition:
+                StringEqualsIfExists:
+                  iam:PassedToService:
+                  - cloudformation.amazonaws.com
+                  - elasticbeanstalk.amazonaws.com
+                  - ec2.amazonaws.com
+                  - ecs-tasks.amazonaws.com
+            - Action:
+              - codecommit:CancelUploadArchive
+              - codecommit:GetBranch
+              - codecommit:GetCommit
+              - codecommit:GetUploadArchiveStatus
+              - codecommit:UploadArchive
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - codedeploy:CreateDeployment
+              - codedeploy:GetApplication
+              - codedeploy:GetApplicationRevision
+              - codedeploy:GetDeployment
+              - codedeploy:GetDeploymentConfig
+              - codedeploy:RegisterApplicationRevision
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - elasticbeanstalk:*
+              - ec2:*
+              - elasticloadbalancing:*
+              - autoscaling:*
+              - cloudwatch:*
+              - s3:*
+              - sns:*
+              - cloudformation:*
+              - rds:*
+              - sqs:*
+              - ecs:*
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - lambda:InvokeFunction
+              - lambda:ListFunctions
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - opsworks:CreateDeployment
+              - opsworks:DescribeApps
+              - opsworks:DescribeCommands
+              - opsworks:DescribeDeployments
+              - opsworks:DescribeInstances
+              - opsworks:DescribeStacks
+              - opsworks:UpdateApp
+              - opsworks:UpdateStack
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - cloudformation:CreateStack
+              - cloudformation:DeleteStack
+              - cloudformation:DescribeStacks
+              - cloudformation:UpdateStack
+              - cloudformation:CreateChangeSet
+              - cloudformation:DeleteChangeSet
+              - cloudformation:DescribeChangeSet
+              - cloudformation:ExecuteChangeSet
+              - cloudformation:SetStackPolicy
+              - cloudformation:ValidateTemplate
+              Resource: "*"
+              Effect: Allow
+            - Action:
+              - codebuild:BatchGetBuilds
+              - codebuild:StartBuild
+              Resource: "*"
+              Effect: Allow
+            - Effect: Allow
+              Action:
+              - devicefarm:ListProjects
+              - devicefarm:ListDevicePools
+              - devicefarm:GetRun
+              - devicefarm:GetUpload
+              - devicefarm:CreateUpload
+              - devicefarm:ScheduleRun
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - servicecatalog:ListProvisioningArtifacts
+              - servicecatalog:CreateProvisioningArtifact
+              - servicecatalog:DescribeProvisioningArtifact
+              - servicecatalog:DeleteProvisioningArtifact
+              - servicecatalog:UpdateProduct
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - cloudformation:ValidateTemplate
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - ecr:DescribeImages
+              Resource: "*"
+            Version: '2012-10-17'
+
+# Outputs:
+#   set of outputs

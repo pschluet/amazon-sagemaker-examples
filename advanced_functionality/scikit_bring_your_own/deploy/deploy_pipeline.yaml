@@ -9,7 +9,6 @@ Parameters:
   RepositoryName:
     Description: GitHub repository name
     Type: String
-    Default: test
   GitHubOwner:
     Type: String
   GitHubSecret:
@@ -24,7 +23,8 @@ Parameters:
     Default: TestModel
   RepositoryURL:
     Description: URL of the GitHub repository that contains the source code
-    Default: https://github.com/pschluet/amazon-sagemaker-examples.git
+    Type: String
+    # Default: https://github.com/pschluet/amazon-sagemaker-examples.git
 # Mappings:
 #   set of mappings
 # Conditions:
@@ -44,39 +44,39 @@ Resources:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service:
-                - codepipeline.amazonaws.com
+                - codebuild.amazonaws.com
             Action: 'sts:AssumeRole'
-    Policies:
-      - PolicyName: AWS-Codebuild-Service-Role
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Resource:
-            # TODO change to correct log names
-            # - arn:aws:logs:us-east-1:435432815368:log-group:/aws/codebuild/test
-            # - arn:aws:logs:us-east-1:435432815368:log-group:/aws/codebuild/test:*
-            - !GetAtt 
-              - CodeBuildLogGroup
-              - Arn
-            Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-          - Effect: Allow
-            Resource:
-            - arn:aws:s3:::codepipeline-us-east-1-*
-            Action:
-            - s3:PutObject
-            - s3:GetObject
-            - s3:GetObjectVersion
-            - s3:GetBucketAcl
-            - s3:GetBucketLocation
+      Policies:
+        - PolicyName: AWS-Codebuild-Service-Role
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Resource:
+              # TODO change to correct log names
+              # - arn:aws:logs:us-east-1:435432815368:log-group:/aws/codebuild/test
+              # - arn:aws:logs:us-east-1:435432815368:log-group:/aws/codebuild/test:*
+              - !GetAtt 
+                - CodeBuildLogGroup
+                - Arn
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            - Effect: Allow
+              Resource:
+              - arn:aws:s3:::codepipeline-us-east-1-*
+              Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:GetBucketAcl
+              - s3:GetBucketLocation
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties: 
@@ -119,7 +119,7 @@ Resources:
     Properties:
       Bucket: !Ref CodePipelineArtifactStoreBucket
       PolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
           - Sid: DenyUnEncryptedObjectUploads
             Effect: Deny
@@ -195,7 +195,7 @@ Resources:
                 PollForSourceChanges: false
               Name: SourceAction
               OutputArtifacts: 
-                - Name: SourceOutput
+                - Name: 'SourceOutput'
               RunOrder: 1
         - Name: DeployToEcr
           Actions:
@@ -204,131 +204,128 @@ Resources:
                 Owner: AWS
                 Provider: CodeBuild
                 Version: 1
-              Configuration: Json
+              Configuration:
+                ProjectName: 'MyProject'
               InputArtifacts: 
-                - InputArtifact
-              Name: String
-              OutputArtifacts: 
-                - OutputArtifact
-              Region: String
-              RoleArn: String
-              RunOrder: Integer
+                - Name: 'SourceOutput'
+              Name: BuildDockerImage
+              RunOrder: 1
   CodePipelineServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service:
                 - codepipeline.amazonaws.com
             Action: 'sts:AssumeRole'
-    Policies:
-      - PolicyName: AWS-CodePipeline-Service
-        PolicyDocument:
-          Statement:
-            - Action:
-              - iam:PassRole
-              Resource: "*"
-              Effect: Allow
-              Condition:
-                StringEqualsIfExists:
-                  iam:PassedToService:
-                  - cloudformation.amazonaws.com
-                  - elasticbeanstalk.amazonaws.com
-                  - ec2.amazonaws.com
-                  - ecs-tasks.amazonaws.com
-            - Action:
-              - codecommit:CancelUploadArchive
-              - codecommit:GetBranch
-              - codecommit:GetCommit
-              - codecommit:GetUploadArchiveStatus
-              - codecommit:UploadArchive
-              Resource: "*"
-              Effect: Allow
-            - Action:
-              - codedeploy:CreateDeployment
-              - codedeploy:GetApplication
-              - codedeploy:GetApplicationRevision
-              - codedeploy:GetDeployment
-              - codedeploy:GetDeploymentConfig
-              - codedeploy:RegisterApplicationRevision
-              Resource: "*"
-              Effect: Allow
-            - Action:
-              - elasticbeanstalk:*
-              - ec2:*
-              - elasticloadbalancing:*
-              - autoscaling:*
-              - cloudwatch:*
-              - s3:*
-              - sns:*
-              - cloudformation:*
-              - rds:*
-              - sqs:*
-              - ecs:*
-              Resource: "*"
-              Effect: Allow
-            - Action:
-              - lambda:InvokeFunction
-              - lambda:ListFunctions
-              Resource: "*"
-              Effect: Allow
-            - Action:
-              - opsworks:CreateDeployment
-              - opsworks:DescribeApps
-              - opsworks:DescribeCommands
-              - opsworks:DescribeDeployments
-              - opsworks:DescribeInstances
-              - opsworks:DescribeStacks
-              - opsworks:UpdateApp
-              - opsworks:UpdateStack
-              Resource: "*"
-              Effect: Allow
-            - Action:
-              - cloudformation:CreateStack
-              - cloudformation:DeleteStack
-              - cloudformation:DescribeStacks
-              - cloudformation:UpdateStack
-              - cloudformation:CreateChangeSet
-              - cloudformation:DeleteChangeSet
-              - cloudformation:DescribeChangeSet
-              - cloudformation:ExecuteChangeSet
-              - cloudformation:SetStackPolicy
-              - cloudformation:ValidateTemplate
-              Resource: "*"
-              Effect: Allow
-            - Action:
-              - codebuild:BatchGetBuilds
-              - codebuild:StartBuild
-              Resource: "*"
-              Effect: Allow
-            - Effect: Allow
-              Action:
-              - devicefarm:ListProjects
-              - devicefarm:ListDevicePools
-              - devicefarm:GetRun
-              - devicefarm:GetUpload
-              - devicefarm:CreateUpload
-              - devicefarm:ScheduleRun
-              Resource: "*"
-            - Effect: Allow
-              Action:
-              - servicecatalog:ListProvisioningArtifacts
-              - servicecatalog:CreateProvisioningArtifact
-              - servicecatalog:DescribeProvisioningArtifact
-              - servicecatalog:DeleteProvisioningArtifact
-              - servicecatalog:UpdateProduct
-              Resource: "*"
-            - Effect: Allow
-              Action:
-              - cloudformation:ValidateTemplate
-              Resource: "*"
-            - Effect: Allow
-              Action:
-              - ecr:DescribeImages
-              Resource: "*"
+      Policies:
+        - PolicyName: AWS-CodePipeline-Service
+          PolicyDocument:
+            Statement:
+              - Action:
+                - iam:PassRole
+                Resource: "*"
+                Effect: Allow
+                Condition:
+                  StringEqualsIfExists:
+                    iam:PassedToService:
+                    - cloudformation.amazonaws.com
+                    - elasticbeanstalk.amazonaws.com
+                    - ec2.amazonaws.com
+                    - ecs-tasks.amazonaws.com
+              - Action:
+                - codecommit:CancelUploadArchive
+                - codecommit:GetBranch
+                - codecommit:GetCommit
+                - codecommit:GetUploadArchiveStatus
+                - codecommit:UploadArchive
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                - codedeploy:CreateDeployment
+                - codedeploy:GetApplication
+                - codedeploy:GetApplicationRevision
+                - codedeploy:GetDeployment
+                - codedeploy:GetDeploymentConfig
+                - codedeploy:RegisterApplicationRevision
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                - elasticbeanstalk:*
+                - ec2:*
+                - elasticloadbalancing:*
+                - autoscaling:*
+                - cloudwatch:*
+                - s3:*
+                - sns:*
+                - cloudformation:*
+                - rds:*
+                - sqs:*
+                - ecs:*
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                - lambda:InvokeFunction
+                - lambda:ListFunctions
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                - opsworks:CreateDeployment
+                - opsworks:DescribeApps
+                - opsworks:DescribeCommands
+                - opsworks:DescribeDeployments
+                - opsworks:DescribeInstances
+                - opsworks:DescribeStacks
+                - opsworks:UpdateApp
+                - opsworks:UpdateStack
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                - cloudformation:CreateStack
+                - cloudformation:DeleteStack
+                - cloudformation:DescribeStacks
+                - cloudformation:UpdateStack
+                - cloudformation:CreateChangeSet
+                - cloudformation:DeleteChangeSet
+                - cloudformation:DescribeChangeSet
+                - cloudformation:ExecuteChangeSet
+                - cloudformation:SetStackPolicy
+                - cloudformation:ValidateTemplate
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                - codebuild:BatchGetBuilds
+                - codebuild:StartBuild
+                Resource: "*"
+                Effect: Allow
+              - Effect: Allow
+                Action:
+                - devicefarm:ListProjects
+                - devicefarm:ListDevicePools
+                - devicefarm:GetRun
+                - devicefarm:GetUpload
+                - devicefarm:CreateUpload
+                - devicefarm:ScheduleRun
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                - servicecatalog:ListProvisioningArtifacts
+                - servicecatalog:CreateProvisioningArtifact
+                - servicecatalog:DescribeProvisioningArtifact
+                - servicecatalog:DeleteProvisioningArtifact
+                - servicecatalog:UpdateProduct
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                - cloudformation:ValidateTemplate
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                - ecr:DescribeImages
+                Resource: "*"
             Version: '2012-10-17'
 
 # Outputs:
